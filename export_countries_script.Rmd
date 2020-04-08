@@ -1,0 +1,96 @@
+---
+title: "timeseries"
+output: html_document
+---
+
+## Installing Packages
+
+```{r echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+packages = c('ggplot2', 'tidyverse', 'plotly', 'lubridate', 'dplyr', 'ggrepel')
+for (p in packages) {
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p, character.only = T)
+}
+```
+
+## Read Data
+
+```{r}
+export_data <- read_csv("data/exports_country.csv")
+import_data <- read_csv("data/imports_country.csv")
+```
+
+## ----------------- Transforming of data -------------------
+
+```{r}
+# 1. Separate each row within date column (e.g. "1976-Jan" into "1976" and "Jan")
+tidy_data <- separate(export_data, Date, c("month", "year"))
+# 2. Converts each row within year column into Date format, then extract Year out of Date, then convert it to int
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+# 3. Remove first column of dataset (months), as I don't need months for time series
+tidy_data <- tidy_data[-c(1)]
+# 4. Use gather() to assign key-value pairs, making the dataset tall/long instead of wide
+exportdatalong <- gather(tidy_data, country, export_value, -year)
+exportdatalong <- subset(exportdatalong, country == "America" | country == "China")
+exportdatalong <- filter(exportdatalong, year != 2020)
+# 5. Rearrange dataset and store it in a new variable
+exportdatafinal <- exportdatalong %>%
+  group_by(country, year) %>%
+  summarise(export_value = sum(export_value))
+# 6. Export tidied dataset to a CSV file
+#write_csv(exportdata2, "data/exports_country_tidy.csv")
+```
+
+```{r}
+## ----------- For Import Data -----------
+tidyImpData <- separate(import_data, date, c("month", "year"))
+tidyImpData$year <- as.Date(tidyImpData$year, format = "%y")
+tidyImpData$year <- year(tidyImpData$year)
+tidyImpData$year <- as.integer(tidyImpData$year)
+tidyImpData <- tidyImpData[-c(1)]
+importdatalong <- gather(tidyImpData, country, import_value, -year)
+# Remove countries with (DC) in them
+importdatalong[!grepl("(DC)", importdatalong$country)]
+importdatafinal <- importdatalong %>%
+  group_by(country, year) %>%
+  summarise(import_value = sum(import_value))
+```
+
+```{r}
+# Export + Import values
+importexportdata <- merge(exportdatafinal, importdatafinal, by=c("country","year"))
+importexportdata <- filter(importexportdata, year != 2020)
+magicquadrantdata <- mutate(importexportdata, export_percentile = ntile(importexportdata$export_value,100))
+magicquadrantdata <- mutate(magicquadrantdata, import_percentile = ntile(importexportdata$import_value,100))
+magicquadrantdata$trade_balance <- magicquadrantdata$export_value - magicquadrantdata$import_value
+```
+
+## Magic Quadrant Plot
+
+```{r}
+magicquadrantdata_2019 <- filter(magicquadrantdata, year == 2019)
+plot <- ggplot(magicquadrantdata_2019, aes(x=export_percentile, y=import_percentile, color=trade_balance)) +
+  geom_point() +
+  geom_text_repel(aes(x=export_percentile, y=import_percentile, label=country)) +
+  scale_color_gradient(low="red", high="green") +
+  geom_hline(yintercept=50, linetype="dashed", color="grey") +
+  geom_vline(xintercept=50, linetype="dashed", color="grey") +
+  theme(panel.background = element_blank())
+
+plot
+#ggsave("testplot.png",width=10, height=10, dpi=300)
+```
+
+## Time Series Plot
+
+```{r}
+head(exportdatafinal)
+
+ggplot(exportdatafinal, aes(x = year, y = export_value, color = country)) +
+  geom_line()
+```
+
