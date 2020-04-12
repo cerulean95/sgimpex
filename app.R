@@ -289,7 +289,7 @@ ui <- dashboardPage(
                     fluidRow(
                         column(12, h1("Magic Quadrant for Singapore's Trade Partners")),
                         
-                        column(10, plotOutput("magicQuadrant", height = "500px"))
+                        column(10, plotlyOutput("magicQuadrant", height = "500px"))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
@@ -345,6 +345,9 @@ ui <- dashboardPage(
             #---------------------------------------------EXPORTERSTRENDBYCOUNTRY DASHBOARD----------------------------------------------
             tabItem(tabName = "EXPORTERSTRENDBYCOUNTRY",
                     fluidRow(
+                        column(12, h1("Exporters Trend by Country")),
+                        
+                        column(10, plotlyOutput(outputId="timeExportCountry", height = "500px"))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
@@ -454,14 +457,13 @@ ui <- dashboardPage(
 server <- function(input, output) {
     
     # ----- MAGIC QUADRANT DASHBOARD -----
-    output$magicQuadrant <- renderPlot({
+    output$magicQuadrant <- renderPlotly({
         magicquadrantdata_2019 <- filter(magicquadrantdata, year == 2019)
         plot <- ggplot(magicquadrantdata_2019, aes(x=export_percentile, y=import_percentile, color=trade_balance, text= paste0("Country: ", country))) +
             labs(title = "Magic Quadrant of Singapore's Trade Balance", 
                  x = "Export Percentile",
                  y = "Import Percentile") +
             geom_point(alpha = 0.7) +
-            geom_text_repel(aes(x=export_percentile, y=import_percentile, label=country)) +
             scale_color_gradient(name = "Trade Balance", low = "red", high = "green") +
             geom_hline(yintercept=50, linetype="dashed", color="grey") +
             geom_vline(xintercept=50, linetype="dashed", color="grey") +
@@ -472,9 +474,20 @@ server <- function(input, output) {
             annotate("text", x=25,y=45,label="Low Export, Low Import", alpha = 0.6) +
             annotate("text", x=80,y=45,label="High Export, Low Import", alpha = 0.6)
         
-        plot
+        ggplotly(plot)
     })
     
+    # ----- Exports Country trends -----
+    output$timeExportCountry <- renderPlotly({
+        plot2 <- ggplot(importexportdata, aes(x = year, y = export_value, color = country)) +
+            geom_line() +
+            labs(title = "Time Series of Exports by Country",
+                 x = "Year",
+                 y = "Exports")
+        
+        ggplotly(plot2)
+    })
+
         #----------------------------------------------------EXPORT COMMODITY DASHBOARD-----------------------------------------------
     output$ExportCommodity <- renderPlot({
         newTitle <- paste0("Commodity exported in ", input$FilterYearExportProduct)
