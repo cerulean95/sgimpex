@@ -38,6 +38,66 @@ for(p in packages){
 }
 #--------------------------------------------------------------------------------------------------------
 
+# ----- Reading Data Files -----
+export_data <- read_csv("data/Domestic Exports Country.csv")
+import_data <- read_csv("data/Import Country.csv")
+export_commodity_data <- read_csv("data/Domestic Exports Commodity.csv")
+import_commodity_data <- read_csv("data/Import Commodity.csv")
+
+# ----- Exports by Country -----
+tidy_data <- separate(export_data, Date, c("month", "year"))
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+tidy_data <- tidy_data[-c(1)]
+tidy_data <- gather(tidy_data, country, export_value, -year)
+tidy_data <- filter(tidy_data, year != 2020)
+exportdatafinal <- tidy_data %>%
+    group_by(country, year) %>%
+    summarise(export_value = sum(export_value))
+
+# ----- Imports by Country -----
+tidy_data <- separate(import_data, date, c("month", "year"))
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+tidy_data <- tidy_data[-c(1)]
+tidy_data <- gather(tidy_data, country, import_value, -year)
+importdatafinal <- tidy_data %>%
+    group_by(country, year) %>%
+    summarise(import_value = sum(import_value))
+
+# ----- Exports by Commodity -----
+tidy_data <- separate(export_commodity_data, Date, c("month", "year"))
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+tidy_data <- tidy_data[-c(1)]
+tidy_data <- gather(tidy_data, commodity, export_value, -year)
+tidy_data <- filter(tidy_data, year != 2020)
+exportcommdatafinal <- tidy_data %>%
+    group_by(commodity, year) %>%
+    summarise(export_value = sum(export_value))
+
+# ----- Imports by Commodity -----
+tidy_data <- separate(import_commodity_data, Date, c("month", "year"))
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+tidy_data <- tidy_data[-c(1)]
+tidy_data <- gather(tidy_data, commodity, import_value, -year)
+tidy_data <- filter(tidy_data, year != 2020)
+importcommdatafinal <- tidy_data %>%
+    group_by(commodity, year) %>%
+    summarise(import_value = sum(import_value))
+
+# ----- Merge of Imports + Exports by Country -----
+importexportdata <- merge(exportdatafinal, importdatafinal, by=c("country","year"))
+importexportdata <- filter(importexportdata, year != 2020)
+importexportdata <- filter(importexportdata, !grepl("Oil", country))
+magicquadrantdata <- mutate(importexportdata, export_percentile = ntile(importexportdata$export_value,100))
+magicquadrantdata <- mutate(magicquadrantdata, import_percentile = ntile(importexportdata$import_value,100))
+magicquadrantdata$trade_balance <- magicquadrantdata$export_value - magicquadrantdata$import_value
 
 #---------------------------------------- Total Import and Export of Singapore----------
 export_country_data <- read_csv("data/Exports Country.csv")
@@ -227,6 +287,9 @@ ui <- dashboardPage(
             #-------------------------------------------------------MAGIC QUADRANT DASHBOARD------------------------------------------
             tabItem(tabName = "MAGICQUADRANT",
                     fluidRow(
+                        column(12, h1("Magic Quadrant for Singapore's Trade Partners")),
+                        
+                        column(10, plotOutput("magicQuadrant", height = "500px"))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
@@ -389,6 +452,29 @@ ui <- dashboardPage(
 )
 
 server <- function(input, output) {
+    
+    # ----- MAGIC QUADRANT DASHBOARD -----
+    output$magicQuadrant <- renderPlot({
+        magicquadrantdata_2019 <- filter(magicquadrantdata, year == 2019)
+        plot <- ggplot(magicquadrantdata_2019, aes(x=export_percentile, y=import_percentile, color=trade_balance, text= paste0("Country: ", country))) +
+            labs(title = "Magic Quadrant of Singapore's Trade Balance", 
+                 x = "Export Percentile",
+                 y = "Import Percentile") +
+            geom_point(alpha = 0.7) +
+            geom_text_repel(aes(x=export_percentile, y=import_percentile, label=country)) +
+            scale_color_gradient(name = "Trade Balance", low = "red", high = "green") +
+            geom_hline(yintercept=50, linetype="dashed", color="grey") +
+            geom_vline(xintercept=50, linetype="dashed", color="grey") +
+            theme(panel.background = element_blank())
+        
+        plot <- plot + annotate("text", x=25,y=100,label="Low Export, High Import", alpha = 0.6) +
+            annotate("text", x=80,y=100,label="Top Trade Partners", alpha = 0.6) +
+            annotate("text", x=25,y=45,label="Low Export, Low Import", alpha = 0.6) +
+            annotate("text", x=80,y=45,label="High Export, Low Import", alpha = 0.6)
+        
+        plot
+    })
+    
         #----------------------------------------------------EXPORT COMMODITY DASHBOARD-----------------------------------------------
     output$ExportCommodity <- renderPlot({
         newTitle <- paste0("Commodity exported in ", input$FilterYearExportProduct)
