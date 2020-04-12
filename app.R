@@ -40,14 +40,9 @@ for(p in packages){
 
 # ----- Reading Data Files -----
 export_data <- read_csv("data/Exports Country.csv")
+colnames(export_data)[1] <- "Date"
 import_data <- read_csv("data/Import Country.csv")
-export_commodity_data <- read_csv("data/Exports Commodity.csv")
-import_commodity_data <- read_csv("data/Import Commodity.csv")
-domestic_export_data <- read_csv("data/Domestic Exports Country.csv")
-domesitc_export_comm_data <- read_csv("data/Domestic Exports Commodity.csv")
-reexport_data <- read_csv("data/ReExports Country.csv")
-reexport_comm_data <- read_csv("data/ReExports Commodity.csv")
-
+colnames(import_data)[1] <- "Date"
 # ----- Exports by Country -----
 tidy_data <- separate(export_data, Date, c("month", "year"))
 tidy_data$year <- as.Date(tidy_data$year, format = "%y")
@@ -61,7 +56,7 @@ exportdatafinal <- tidy_data %>%
     summarise(export_value = sum(export_value))
 
 # ----- Imports by Country -----
-tidy_data <- separate(import_data, date, c("month", "year"))
+tidy_data <- separate(import_data, Date, c("month", "year"))
 tidy_data$year <- as.Date(tidy_data$year, format = "%y")
 tidy_data$year <- year(tidy_data$year)
 tidy_data$year <- as.integer(tidy_data$year)
@@ -70,6 +65,32 @@ tidy_data <- gather(tidy_data, country, import_value, -year)
 importdatafinal <- tidy_data %>%
     group_by(country, year) %>%
     summarise(import_value = sum(import_value))
+
+# ----- Merge of Imports + Exports by Country -----
+importexportdata <- merge(exportdatafinal, importdatafinal, by=c("country","year"))
+importexportdata <- filter(importexportdata, year < 2020)
+importexportdata <- filter(importexportdata, country != "Asia")
+importexportdata <- filter(importexportdata, !grepl("Oil", country))
+magicquadrantdata <- mutate(importexportdata, export_percentile = ntile(importexportdata$export_value,100))
+magicquadrantdata <- mutate(magicquadrantdata, import_percentile = ntile(importexportdata$import_value,100))
+magicquadrantdata$trade_balance <- magicquadrantdata$export_value - magicquadrantdata$import_value
+
+
+#---Trends
+
+
+export_commodity_data <- read_csv("data/Exports Commodity.csv")
+colnames(export_commodity_data)[1] <- "Date"
+import_commodity_data <- read_csv("data/Import Commodity.csv")
+colnames(import_commodity_data)[1] <- "Date"
+domestic_export_data <- read_csv("data/Domestic Exports Country.csv")
+colnames(domestic_export_data)[1] <- "Date"
+domesitc_export_comm_data <- read_csv("data/Domestic Exports Commodity.csv")
+colnames(domesitc_export_comm_data)[1] <- "Date"
+reexport_data <- read_csv("data/ReExports Country.csv")
+colnames(reexport_data)[1] <- "Date"
+reexport_comm_data <- read_csv("data/ReExports Commodity.csv")
+colnames(reexport_comm_data)[1] <- "Date"
 
 # ----- Exports by Commodity -----
 tidy_data <- separate(export_commodity_data, Date, c("month", "year"))
@@ -95,14 +116,6 @@ importcommdatafinal <- tidy_data %>%
     group_by(commodity, year) %>%
     summarise(import_value = sum(import_value))
 
-# ----- Merge of Imports + Exports by Country -----
-importexportdata <- merge(exportdatafinal, importdatafinal, by=c("country","year"))
-importexportdata <- filter(importexportdata, year < 2020)
-importexportdata <- filter(importexportdata, country != "Asia")
-importexportdata <- filter(importexportdata, !grepl("Oil", country))
-magicquadrantdata <- mutate(importexportdata, export_percentile = ntile(importexportdata$export_value,100))
-magicquadrantdata <- mutate(magicquadrantdata, import_percentile = ntile(importexportdata$import_value,100))
-magicquadrantdata$trade_balance <- magicquadrantdata$export_value - magicquadrantdata$import_value
 
 # ----- Merge of Imports + Exports by Commodity -----
 importexportcommdata <- merge(exportcommdatafinal, importcommdatafinal, by=c("commodity", "year"))
@@ -148,12 +161,92 @@ export_country_datalong <- gather(export_country_tidy_data, country, export_valu
 # 5. Rearrange dataset and store it in a new variable
 export_country_data2 <- export_country_datalong %>%
     group_by(country, year) %>%
-    summarise(export_value = sum(export_value))
+    summarise(export_value = sum(export_value))%>%
+    ungroup()
+
 # 6. Export tidied dataset to a CSV file
 #write_csv(exportdata2, "data/exports_country_tidy.csv")
 
 export_country_data2$year <- as.integer(format(export_country_data2$year, "%Y"))
+export_country_data2=export_country_data2[export_country_data2$year<2020 & export_country_data2$year>2000,]
+export_country_data2=export_country_data2[export_country_data2$country=="Indonesia" | export_country_data2$country=="Brunei" | export_country_data2$country=="Cambodia" | export_country_data2$country=="Lao Peo Dem Rep" | export_country_data2$country=="Malaysia" |export_country_data2$country=="Myanmar" | export_country_data2$country=="Philippines" | export_country_data2$country=="Thailand" | export_country_data2$country=="Vietnam" ,]
 export_country_data2 <- na.omit(export_country_data2)
+
+reexport_country_data <- read_csv("data/ReExports Country.csv")
+colnames(reexport_country_data)[1] <- "Date"
+# 1. Separate each row within date column (e.g. "1976-Jan" into "1976" and "Jan")
+reexport_country_tidy_data <- separate(reexport_country_data, Date, c("month", "year"))
+# 2. Converts each row within year column into Date format
+reexport_country_tidy_data$year <- as.Date(reexport_country_tidy_data$year, format = "%y")
+# 3. Remove first column of dataset (months), as I don't need months for time series
+reexport_country_tidy_data <- reexport_country_tidy_data[-c(1)]
+# 4. Use gather() to assign key-value pairs, making the dataset tall/long instead of wide
+reexport_country_datalong <- gather(reexport_country_tidy_data, country, reexport_value, -year)
+# 5. Rearrange dataset and store it in a new variable
+reexport_country_data2 <- reexport_country_datalong %>%
+    group_by(country, year) %>%
+    summarise(reexport_value = sum(reexport_value))%>%
+    ungroup()
+
+# 6. reexport tidied dataset to a CSV file
+#write_csv(reexportdata2, "data/reexports_country_tidy.csv")
+
+reexport_country_data2$year <- as.integer(format(reexport_country_data2$year, "%Y"))
+reexport_country_data2=reexport_country_data2[reexport_country_data2$year<2020 & reexport_country_data2$year>2000,]
+reexport_country_data2=reexport_country_data2[substring(reexport_country_data2$country,1,3)=="Oil",]
+reexport_country_data2$country <- substring(reexport_country_data2$country,6,)
+reexport_country_data2=reexport_country_data2[reexport_country_data2$country=="Indonesia" | reexport_country_data2$country=="Brunei Darussalam"| reexport_country_data2$country=="Malaysia"| reexport_country_data2$country=="Thailand"| reexport_country_data2$country=="Vietnam"| reexport_country_data2$country=="Cambodia"| reexport_country_data2$country=="Myanmar" | reexport_country_data2$country=="Philippines" ,]
+
+
+reexport_country_data2 <- na.omit(reexport_country_data2)
+
+domesticexport_country_data <- read_csv("data/Domestic Exports Country.csv")
+colnames(domesticexport_country_data)[1] <- "Date"
+# 1. Separate each row within date column (e.g. "1976-Jan" into "1976" and "Jan")
+domesticexport_country_tidy_data <- separate(domesticexport_country_data, Date, c("month", "year"))
+# 2. Converts each row within year column into Date format
+domesticexport_country_tidy_data$year <- as.Date(domesticexport_country_tidy_data$year, format = "%y")
+# 3. Remove first column of dataset (months), as I don't need months for time series
+domesticexport_country_tidy_data <- domesticexport_country_tidy_data[-c(1)]
+# 4. Use gather() to assign key-value pairs, making the dataset tall/long instead of wide
+domesticexport_country_datalong <- gather(domesticexport_country_tidy_data, country, domesticexport_value, -year)
+# 5. Rearrange dataset and store it in a new variable
+domesticexport_country_data2 <- domesticexport_country_datalong %>%
+    group_by(country, year) %>%
+    summarise(domesticexport_value = sum(domesticexport_value))%>%
+    ungroup()
+
+# 6. domesticexport tidied dataset to a CSV file
+#write_csv(domesticexportdata2, "data/Domestic Exports_country_tidy.csv")
+
+domesticexport_country_data2$year <- as.integer(format(domesticexport_country_data2$year, "%Y"))
+domesticexport_country_data2=domesticexport_country_data2[domesticexport_country_data2$year<2020 & domesticexport_country_data2$year>2000,]
+domesticexport_country_data2=domesticexport_country_data2[domesticexport_country_data2$country=="Indonesia" | domesticexport_country_data2$country=="Brunei" | domesticexport_country_data2$country=="Cambodia" | domesticexport_country_data2$country=="Lao Peo Dem Rep" | domesticexport_country_data2$country=="Malaysia" |domesticexport_country_data2$country=="Myanmar" | domesticexport_country_data2$country=="Philippines" | domesticexport_country_data2$country=="Thailand" | domesticexport_country_data2$country=="Vietnam" ,]
+domesticexport_country_data2 <- na.omit(domesticexport_country_data2)
+
+import_country_data <- read_csv("data/Import Country.csv")
+colnames(import_country_data)[1] <- "Date"
+# 1. Separate each row within date column (e.g. "1976-Jan" into "1976" and "Jan")
+import_country_tidy_data <- separate(import_country_data, Date, c("month", "year"))
+# 2. Converts each row within year column into Date format
+import_country_tidy_data$year <- as.Date(import_country_tidy_data$year, format = "%y")
+# 3. Remove first column of dataset (months), as I don't need months for time series
+import_country_tidy_data <- import_country_tidy_data[-c(1)]
+# 4. Use gather() to assign key-value pairs, making the dataset tall/long instead of wide
+import_country_datalong <- gather(import_country_tidy_data, country, import_value, -year)
+# 5. Rearrange dataset and store it in a new variable
+import_country_data2 <- import_country_datalong %>%
+    group_by(country, year) %>%
+    summarise(import_value = sum(import_value))%>%
+    ungroup()
+
+# 6. import tidied dataset to a CSV file
+#write_csv(importdata2, "data/imports_country_tidy.csv")
+
+import_country_data2$year <- as.integer(format(import_country_data2$year, "%Y"))
+import_country_data2=import_country_data2[import_country_data2$year<2020 & import_country_data2$year>2000,]
+import_country_data2=import_country_data2[import_country_data2$country=="Indonesia" | import_country_data2$country=="Brunei" | import_country_data2$country=="Cambodia" | import_country_data2$country=="Lao Peo Dem Rep" | import_country_data2$country=="Malaysia" |import_country_data2$country=="Myanmar" | import_country_data2$country=="Philippines" | import_country_data2$country=="Thailand" | import_country_data2$country=="Vietnam" ,]
+import_country_data2 <- na.omit(import_country_data2)
 
 #Commodity Data
 #-----------------------------------------------------------------------------------------------------------
@@ -176,8 +269,9 @@ export_commodity_data2 <- export_commodity_datalong %>%
 #write_csv(exportdata2, "data/exports_country_tidy.csv")
 
 export_commodity_data2$year <- as.integer(format(export_commodity_data2$year, "%Y"))
+export_commodity_data2=export_commodity_data2[export_commodity_data2$year<2020 & export_commodity_data2$year>2000,]
+export_commodity_data2=export_commodity_data2[!grepl(":",export_commodity_data2$commodity,fixed=TRUE),]
 export_commodity_data2 <- na.omit(export_commodity_data2)
-export_commodity_data2 <- filter(export_commodity_data2, year < 2020)
 
 import_commodity_data <- read_csv("data/Import Commodity.csv")
 colnames(import_commodity_data)[1] <- "Date"
@@ -197,10 +291,9 @@ import_commodity_data2 <- import_commodity_datalong %>%
 #write_csv(importdata2, "data/imports_country_tidy.csv")
 
 import_commodity_data2$year <- as.integer(format(import_commodity_data2$year, "%Y"))
+import_commodity_data2=import_commodity_data2[import_commodity_data2$year<2020 & import_commodity_data2$year>2000,]
+import_commodity_data2=import_commodity_data2[!grepl(":",import_commodity_data2$commodity,fixed=TRUE),]
 import_commodity_data2 <- na.omit(import_commodity_data2)
-import_commodity_data2 <- filter(import_commodity_data2, year < 2020)
-
-# ----- Re-Export by Commodity Data
 
 reexport_commodity_data <- read_csv("data/ReExports Commodity.csv")
 colnames(reexport_commodity_data)[1] <- "Date"
@@ -216,27 +309,35 @@ reexport_commodity_datalong <- gather(reexport_commodity_tidy_data, commodity, r
 reexport_commodity_data2 <- reexport_commodity_datalong %>%
     group_by(commodity, year) %>%
     summarise(reexport_value = sum(reexport_value))
+# 6. import tidied dataset to a CSV file
+#write_csv(importdata2, "data/imports_country_tidy.csv")
 
 reexport_commodity_data2$year <- as.integer(format(reexport_commodity_data2$year, "%Y"))
+reexport_commodity_data2=reexport_commodity_data2[reexport_commodity_data2$year<2020 & reexport_commodity_data2$year>2000,]
+reexport_commodity_data2=reexport_commodity_data2[!grepl(":",reexport_commodity_data2$commodity,fixed=TRUE),]
 reexport_commodity_data2 <- na.omit(reexport_commodity_data2)
-reexport_commodity_data2 <- filter(reexport_commodity_data2, year < 2020)
-
-# ----- Domestic Export by Commodity Data -----
 
 domesticexport_commodity_data <- read_csv("data/Domestic Exports Commodity.csv")
 colnames(domesticexport_commodity_data)[1] <- "Date"
+# 1. Separate each row within date column (e.g. "1976-Jan" into "1976" and "Jan")
 domesticexport_commodity_tidy_data <- separate(domesticexport_commodity_data, Date, c("month", "year"))
+# 2. Converts each row within year column into Date format
 domesticexport_commodity_tidy_data$year <- as.Date(domesticexport_commodity_tidy_data$year, format = "%y")
+# 3. Remove first column of dataset (months), as I don't need months for time series
 domesticexport_commodity_tidy_data <- domesticexport_commodity_tidy_data[-c(1)]
+# 4. Use gather() to assign key-value pairs, making the dataset tall/long instead of wide
 domesticexport_commodity_datalong <- gather(domesticexport_commodity_tidy_data, commodity, domesticexport_value, -year)
+# 5. Rearrange dataset and store it in a new variable
 domesticexport_commodity_data2 <- domesticexport_commodity_datalong %>%
     group_by(commodity, year) %>%
     summarise(domesticexport_value = sum(domesticexport_value))
+# 6. import tidied dataset to a CSV file
+#write_csv(importdata2, "data/imports_country_tidy.csv")
 
 domesticexport_commodity_data2$year <- as.integer(format(domesticexport_commodity_data2$year, "%Y"))
+domesticexport_commodity_data2=domesticexport_commodity_data2[domesticexport_commodity_data2$year<2020 & domesticexport_commodity_data2$year>2000,]
+domesticexport_commodity_data2=domesticexport_commodity_data2[!grepl(":",domesticexport_commodity_data2$commodity,fixed=TRUE),]
 domesticexport_commodity_data2 <- na.omit(domesticexport_commodity_data2)
-domesticexport_commodity_data2 <- filter(domesticexport_commodity_data2, year < 2020)
-
 
 #-----------------------------------------------------------------------------------------------------------
 
@@ -262,25 +363,25 @@ ui <- dashboardPage(
                      menuItem("MAGIC QUADRANT", tabName = "MAGICQUADRANT", icon = icon("dashboard"))),
             
             menuItem("IMPORT", tabName = "TABIMPORT", icon = icon("dashboard"),
-                     menuItem("TOP IMPORTERS", tabName = "TOPIMPORTERS", icon = icon("dashboard")),
+                     menuItem("ASEAN IMPORTERS", tabName = "TOPIMPORTERS", icon = icon("dashboard")),
                      menuItem("TREND BY COUNTRY", tabName = "IMPORTERSTRENDBYCOUNTRY", icon = icon("dashboard")),
                      menuItem("TREND BY COMMODITY", tabName = "IMPORTERSTRENDBYCOMMODITY", icon = icon("dashboard")),
                      menuItem("IMPORTS BY COMMODITY", tabName = "IMPORTSBYCOMMODITY", icon = icon("dashboard"))),
             
             menuItem("EXPORT", tabName = "TABEXPORT", icon = icon("dashboard"),
-                     menuItem("TOP EXPORTERS", tabName = "TOPEXPORTERS", icon = icon("dashboard")),
+                     menuItem("ASEAN EXPORTERS", tabName = "TOPEXPORTERS", icon = icon("dashboard")),
                      menuItem("TREND BY COUNTRY", tabName = "EXPORTERSTRENDBYCOUNTRY", icon = icon("dashboard")),
                      menuItem("TREND BY COMMODITY", tabName = "EXPORTERSTRENDBYCOMMODITY", icon = icon("dashboard")),
                      menuItem("EXPORTS BY COMMODITY", tabName = "EXPORTSBYCOMMODITY", icon = icon("dashboard"))),
             
-            menuItem("DOMESTIC EXPORT", tabName = "TABIMPORT", icon = icon("dashboard"),
-                     menuItem("TOP DOMESTIC EXPORTERS", tabName = "TOPDOMESTICEXPORTERS", icon = icon("dashboard")),
+            menuItem("DOMESTIC EXPORT", tabName = "TABDOMESTICEXPORT", icon = icon("dashboard"),
+                     menuItem("ASEAN DOMESTIC EXPORTERS", tabName = "TOPDOMESTICEXPORTERS", icon = icon("dashboard")),
                      menuItem("TREND BY COUNTRY", tabName = "DOMESTICEXPORTERSTRENDBYCOUNTRY", icon = icon("dashboard")),
                      menuItem("TREND BY COMMODITY", tabName = "DOMESTICEXPORTERSTRENDBYCOMMODITY", icon = icon("dashboard")),
                      menuItem("DOMESTIC EXPORTS BY COMMODITY", tabName = "DOMESTICEXPORTSBYCOMMODITY", icon = icon("dashboard"))),
             
-            menuItem("RE-EXPORT", tabName = "TABIMPORT", icon = icon("dashboard"),
-                     menuItem("TOP RE-EXPORTERS", tabName = "TOPREEXPORTERS", icon = icon("dashboard")),
+            menuItem("RE-EXPORT", tabName = "TABREEXPORT", icon = icon("dashboard"),
+                     menuItem("ASEAN RE-EXPORTERS BY OIL", tabName = "TOPREEXPORTERS", icon = icon("dashboard")),
                      menuItem("TREND BY COUNTRY", tabName = "REEXPORTERSTRENDBYCOUNTRY", icon = icon("dashboard")),
                      menuItem("TREND BY COMMODITY", tabName = "REEXPORTERSTRENDBYCOMMODITY", icon = icon("dashboard")),
                      menuItem("RE-EXPORTS BY COMMODITY", tabName = "REEXPORTSBYCOMMODITY", icon = icon("dashboard")))
@@ -292,31 +393,19 @@ ui <- dashboardPage(
             tabItem(tabName = "MAINPAGE",
                     fluidRow(
                         column(12, h1("Problem and Motivation")),
-                        column(12, h4("Singapore has long been the key transport hub in the ASEAN region. However, global developments such as the trade war between the US and China, and events closer to home such as Thailand building the Kra canal may shift the balance out of Singapore's favour.")),
-                        column(12, h4("It is key to correctly strategise in such uncertain times. We aim to be able to create new insight and actionable strategy as to how Singapore can maintain its position as a key transport hub.")),
+                        column(12, h4("Trade in Singapore can be a contentious topic.However, the reality is that Singapore is dependent on other countries to survive, as a country with little natural resources.")),
+                        column(12, h4("We realize that Singapore’s ties to other countries, particularly those within the same region, are crucial. Through R, we aim to explore them to draw competitive insights.")),
                         column(12, h1("Our Objective")),
                         column(12, tags$div(
                             tags$ul(
-                                tags$li(h4("Gain the overall insight on the yearly pattern of Singapore's export and import, and 
-                                           the top trading partners.")),
-                                tags$li(h4("Identify the demand for the product and gain insight into the customers' preference 
-                                           based on the goods being exported and imported to Singapore.")),
-                                tags$li(h4("Gain overall insights into Singapore's economic performance based on the Trade 
-                                           Balance trends."))
+                                tags$li(h4("Gain insight into the pattern of Singapore's top trading partners by looking at export, domestic export, re-export import.")),
+                                tags$li(h4("Examine Singapore's reliance on neighbouring economies for trade.")),
+                                tags$li(h4("Examine whether Singapore's trade is sustainable in the long term"))
                             )
                         ))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
-
-            
-            #-------------------------------------------------------TRADE BALANCE DASHBOARD------------------------------------------
-            tabItem(tabName = "TRADEBALANCE",
-                    fluidRow(
-                   )
-            ),
-            #-------------------------------------------------------------------------------------------------------------------
-            
             
             #-------------------------------------------------------MAGIC QUADRANT DASHBOARD------------------------------------------
             tabItem(tabName = "MAGICQUADRANT",
@@ -327,12 +416,22 @@ ui <- dashboardPage(
             ),
             #-------------------------------------------------------------------------------------------------------------------
             
+            
+            
+            #-------------------------------------------------------TRADE BALANCE DASHBOARD------------------------------------------
+            tabItem(tabName = "TRADEBALANCE",
+                    fluidRow(
+                   )
+            ),
+            #-------------------------------------------------------------------------------------------------------------------
             #------------------------------------------------TOPIMPORTERS DASHBOARD---------------------------------------------------
             tabItem(tabName = "TOPIMPORTERS",
                     fluidRow(
-                    )
+                        column(12, h1("ASEAN Importers")),
+                        column(12, plotlyOutput("AseanImporters", height="500px")))
             ),
             #-------------------------------------------------------------------------------------------------------------------
+            
             
             #------------------------------------------------IMPORTERSTRENDBYCOUNTRY DASHBOARD---------------------------------------------------
             tabItem(tabName = "IMPORTERSTRENDBYCOUNTRY",
@@ -361,19 +460,20 @@ ui <- dashboardPage(
                         column(2, sliderInput(
                             inputId = "FilterYearImportCommodity",
                             label = "Year",
-                            min = min(import_commodity_data2$year),
-                            max = max(import_commodity_data2$year),
-                            value = max(import_commodity_data2$year),
+                            min = min(as.numeric(import_commodity_data2$year)),
+                            max = max(as.numeric(import_commodity_data2$year)),
+                            value = max(as.numeric(import_commodity_data2$year)),
                             sep = "",
                             animate = animationOptions(loop = TRUE)))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
             
-            #---------------------------------------------TOPEXPORTERS DASHBOARD----------------------------------------------
+            #---------------------------------------------ASEANEXPORTERS DASHBOARD----------------------------------------------
             tabItem(tabName = "TOPEXPORTERS",
                     fluidRow(
-                    )
+                        column(12, h1("ASEAN Exporters")),
+                        column(12, plotlyOutput("AseanExporters", height="500px")))
             ),
             #-------------------------------------------------------------------------------------------------------------------
             
@@ -404,8 +504,8 @@ ui <- dashboardPage(
                         column(2, sliderInput(
                             inputId = "FilterYearExportCommodity",
                             label = "Year",
-                            min = min(export_commodity_data2$year),
-                            max = max(export_commodity_data2$year),
+                            min = min(as.numeric(export_commodity_data2$year)),
+                            max = max(as.numeric(export_commodity_data2$year)),
                             value = max(export_commodity_data2$year),
                             sep = "",
                             animate = animationOptions(loop = TRUE)))
@@ -414,9 +514,10 @@ ui <- dashboardPage(
             #-------------------------------------------------------------------------------------------------------------------
         
         #---------------------------------------------TOPDOMESTICEXPORTERS DASHBOARD----------------------------------------------
-        tabItem(tabName = "TOPEXPORTERS",
+        tabItem(tabName = "TOPDOMESTICEXPORTERS",
                 fluidRow(
-                )
+                    column(12, h1("ASEAN Domestic Exporters")),
+                    column(12, plotlyOutput("AseanDomesticExporters", height="500px")))
         ),
         #-------------------------------------------------------------------------------------------------------------------
         
@@ -439,7 +540,7 @@ ui <- dashboardPage(
         ),
         #-------------------------------------------------------------------------------------------------------------------
         
-        #------------------------------------------------DOMESTICEXPORTERSBYCOMMODITY DASHBOARD---------------------------------------------------
+        #------------------------------------------------DOMESTICEXPORTERS BYCOMMODITY DASHBOARD---------------------------------------------------
         tabItem(tabName = "DOMESTICEXPORTSBYCOMMODITY",
                 fluidRow(
                     column(12, h1("Domestic Export by Commodity")),
@@ -447,26 +548,22 @@ ui <- dashboardPage(
                     column(2, sliderInput(
                         inputId = "FilterYearDomesticExportCommodity",
                         label = "Year",
-                        min = min(domesticexport_commodity_data2$year),
-                        max = max(domesticexport_commodity_data2$year),
-                        value = max(domesticexport_commodity_data2$year),
+                        min = min(as.numeric(domesticexport_commodity_data2$year)),
+                        max = max(as.numeric(domesticexport_commodity_data2$year)),
+                        value = max(as.numeric(domesticexport_commodity_data2$year)),
                         sep = "",
                         animate = animationOptions(loop = TRUE)))
                 )
         ),
         #-------------------------------------------------------------------------------------------------------------------
-        
-        #---------------------------------------------DOMESTICEXPORTSBYCOMMODITY DASHBOARD----------------------------------------------
 
-    #-------------------------------------------------------------------------------------------------------------------
-    
     #---------------------------------------------TOPRE-EXPORTERS DASHBOARD----------------------------------------------
-    tabItem(tabName = "TOPRE-EXPORTERS",
+    tabItem(tabName = "TOPREEXPORTERS",
             fluidRow(
-            )
+                column(12, h1("ASEAN Re-Exporters by Oil")),
+                column(12, plotlyOutput("AseanReExporters", height="500px")))
     ),
     #-------------------------------------------------------------------------------------------------------------------
-    
     
     #---------------------------------------------REEXPORTERSTRENDBYCOUNTRY DASHBOARD----------------------------------------------
     tabItem(tabName = "REEXPORTERSTRENDBYCOUNTRY",
@@ -486,6 +583,7 @@ ui <- dashboardPage(
     ),
     #-------------------------------------------------------------------------------------------------------------------
     
+    
     #---------------------------------------------REEXPORTSBYCOMMODITY DASHBOARD----------------------------------------------
     tabItem(tabName = "REEXPORTSBYCOMMODITY",
             fluidRow(
@@ -494,9 +592,9 @@ ui <- dashboardPage(
                 column(2, sliderInput(
                     inputId = "FilterYearReExportCommodity",
                     label = "Year",
-                    min = min(export_commodity_data2$year),
-                    max = max(export_commodity_data2$year),
-                    value = max(export_commodity_data2$year),
+                    min = min(as.numeric(reexport_commodity_data2$year)),
+                    max = max(as.numeric(reexport_commodity_data2$year)),
+                    value = max(as.numeric(reexport_commodity_data2$year)),
                     sep = "",
                     animate = animationOptions(loop = TRUE)))
             )
@@ -528,7 +626,153 @@ server <- function(input, output) {
         
         ggplotly(plot)
     })
+    
+        #----------------------------------------------------EXPORT COMMODITY DASHBOARD-----------------------------------------------
+    output$ExportCommodity <- renderPlot({
+        export_commodity_data2 <- filter(export_commodity_data2,year == input$FilterYearExportCommodity)
+        newTitle <- paste0("Commodity Exported in Millions of SGD in ", input$FilterYearExportCommodity)
+        treemap <- treemap(export_commodity_data2,
+                           index = c("commodity", "export_value"),
+                           vSize="export_value",
+                           type="index",
+                           palette=brewer.pal(n=8, "Spectral"),
+                           title=newTitle,
+                           title.legend = "Amount (Million SGD$)",
+                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=14
+        )
+        treemap
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
+    
+    #----------------------------------------------------IMPORT COMMODITY DASHBOARD-----------------------------------------------
+    output$ImportCommodity <- renderPlot({
+        import_commodity_data2 <- filter(import_commodity_data2,year == input$FilterYearImportCommodity)
+        newTitle <- paste0("Commodity Imported in Millions of SGD in ", input$FilterYearImportCommodity)
+        treemap <- treemap(import_commodity_data2,
+                           index = c("commodity", "import_value"),
+                           vSize="import_value",
+                           type="index",
+                           palette=brewer.pal(n=8, "Spectral"),
+                           title=newTitle,
+                           title.legend = "Amount (Million sGD$)",
+                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=14
+        )
+        treemap
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
 
+        #----------------------------------------------------RE-EXPORT COMMODITY DASHBOARD-----------------------------------------------
+    output$ReExportCommodity <- renderPlot({
+        reexport_commodity_data2 <- filter(reexport_commodity_data2,year == input$FilterYearReExportCommodity)
+        newTitle <- paste0("Commodity Re-Exported in  in Millions of SGD in ", input$FilterYearReExportCommodity)
+        treemap <- treemap(reexport_commodity_data2,
+                           index = c("commodity", "reexport_value"),
+                           vSize="reexport_value",
+                           type="index",
+                           palette=brewer.pal(n=8, "Spectral"),
+                           title=newTitle,
+                           title.legend = "Amount (Million SGD$)",
+                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=14
+        )
+        treemap
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
+
+        #----------------------------------------------------DOMESTIC EXPORT COMMODITY DASHBOARD-----------------------------------------------
+    output$DomesticExportCommodity <- renderPlot({
+        domesticexport_commodity_data2 <- filter(domesticexport_commodity_data2,year == input$FilterYearDomesticExportCommodity)
+        newTitle <- paste0("Commodity Domestically Exported in Millions of SGD in ", input$FilterYearDomesticExportCommodity)
+        treemap <- treemap(domesticexport_commodity_data2,
+                           index = c("commodity", "domesticexport_value"),
+                           vSize="domesticexport_value",
+                           type="index",
+                           palette=brewer.pal(n=8, "Spectral"),
+                           title=newTitle,
+                           title.legend = "Amount (Million SGD$)",
+                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=14
+        )
+        treemap
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
+    
+    
+    #---------------------------------------------ASEAN EXPORTERS GRAPH------------------------------------------------------------
+    output$AseanExporters <- renderPlotly({
+        p<-ggplot(data = export_country_data2, aes(x =year , y =export_value, group = country)) +
+                geom_line(aes(color = country), size = 1) +
+                geom_point(aes(color = country), size = 2) +
+                # move the x axis labels up top
+                scale_x_discrete(position = "top") +
+                theme_bw() +
+                # Format tweaks
+                # Remove the legend
+                # Remove the panel border
+                theme(panel.border     = element_blank()) +
+                # Remove just about everything from the y axis
+                theme(panel.grid.major.y = element_blank()) +
+                theme(panel.grid.minor.y = element_blank()) +
+                # Remove a few things from the x axis and increase font size
+                theme(axis.text.x.top      = element_text(size=12)) +
+                # Remove x & y tick marks
+                theme(axis.ticks       = element_blank()) +
+                labs(
+                       title = "ASEAN Export Value from 2000 to 2019")
+        p<-ggplotly(p)
+        p
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
+
+    #---------------------------------------------ASEAN IMPORTERS GRAPH------------------------------------------------------------
+    output$AseanImporters <- renderPlotly({
+        p<-ggplot(data = import_country_data2, aes(x =year , y =import_value, group = country)) +
+            geom_line(aes(color = country), size = 1) +
+            geom_point(aes(color = country), size = 2) +
+            # move the x axis labels up top
+            scale_x_discrete(position = "top") +
+            theme_bw() +
+            # Format tweaks
+            # Remove the legend
+            # Remove the panel border
+            theme(panel.border     = element_blank()) +
+            # Remove just about everything from the y axis
+            theme(panel.grid.major.y = element_blank()) +
+            theme(panel.grid.minor.y = element_blank()) +
+            # Remove a few things from the x axis and increase font size
+            theme(axis.text.x.top      = element_text(size=12)) +
+            # Remove x & y tick marks
+            theme(axis.ticks       = element_blank()) +
+            labs(
+                title = "ASEAN Import Value from 2000 to 2019")
+        p<-ggplotly(p)
+        p
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
+    
+    #---------------------------------------------ASEAN DOMESTIC EXPORTERS GRAPH------------------------------------------------------------
+    output$AseanDomesticExporters <- renderPlotly({
+        p<-ggplot(data = domesticexport_country_data2, aes(x =year , y =domesticexport_value, group = country)) +
+            geom_line(aes(color = country), size = 1) +
+            geom_point(aes(color = country), size = 2) +
+            # move the x axis labels up top
+            scale_x_discrete(position = "top") +
+            theme_bw() +
+            # Format tweaks
+            # Remove the legend
+            # Remove the panel border
+            theme(panel.border     = element_blank()) +
+            # Remove just about everything from the y axis
+            theme(panel.grid.major.y = element_blank()) +
+            theme(panel.grid.minor.y = element_blank()) +
+            # Remove a few things from the x axis and increase font size
+            theme(axis.text.x.top      = element_text(size=12)) +
+            # Remove x & y tick marks
+            theme(axis.ticks       = element_blank()) +
+            labs(
+                title = "ASEAN Domestic Export Value from 2000 to 2019")
+        p<-ggplotly(p)
+        p
+    })
+    #---------------------------------------------------------------------------------------------------------------------------
     # ----------------------------------------------------Exports Trend by Country -----
     output$timeExportCountry <- renderPlotly({
         plotExp <- ggplot(importexportdata, aes(x = year, y = export_value, color = country)) +
@@ -551,22 +795,6 @@ server <- function(input, output) {
         
         ggplotly(plotExp)
     })
-
-        #----------------------------------------------------EXPORT COMMODITY DASHBOARD-----------------------------------------------
-    output$ExportCommodity <- renderPlot({
-        newTitle <- paste0("Commodity exported in ", input$FilterYearExportProduct)
-        treemap <- treemap(export_commodity_data2,
-                           index = "commodity",
-                           vSize="export_value",
-                           type="index",
-                           palette=brewer.pal(n=8, "Spectral"),
-                           title=newTitle,
-                           title.legend = "Amount (Million US$)",
-                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=20
-        )
-        treemap
-    })
-    #---------------------------------------------------------------------------------------------------------------------------
     
     # ----------------------------------------------------Imports Trend by Country -----
     output$timeImportCountry <- renderPlotly({
@@ -591,22 +819,6 @@ server <- function(input, output) {
         ggplotly(plotImp)
     })
     
-    #----------------------------------------------------IMPORT COMMODITY DASHBOARD-----------------------------------------------
-    output$ImportCommodity <- renderPlot({
-        
-        newTitle <- paste0("Commodity imported in ", input$FilterYearImportCommodity)
-        treemap <- treemap(import_commodity_data2,
-                           index = "commodity",
-                           vSize="import_value",
-                           type="index",
-                           palette=brewer.pal(n=8, "Spectral"),
-                           title=newTitle,
-                           title.legend = "Amount (Million US$)",
-                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=20
-        )
-        treemap
-    })
-    #---------------------------------------------------------------------------------------------------------------------------
     
     # ----------------------------------------------------Domestic Exports Trend by Country -----
     output$timeDomExportCountry <- renderPlotly({
@@ -661,41 +873,31 @@ server <- function(input, output) {
         ggplotly(plotExp)
     })
     
-    #----------------------------------------------------RE-EXPORT COMMODITY DASHBOARD-----------------------------------------------
-    output$ReExportCommodity <- renderPlot({
-        
-        newTitle <- paste0("Commodity re-exported in ", input$FilterYearReExportCommodity)
-        treemap <- treemap(reexport_commodity_data2,
-                           index = "commodity",
-                           vSize="reexport_value",
-                           type="index",
-                           palette=brewer.pal(n=8, "Spectral"),
-                           title=newTitle,
-                           title.legend = "Amount (Million US$)",
-                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=20
-        )
-        treemap
+    #---------------------------------------------ASEAN RE-EXPORTERS GRAPH------------------------------------------------------------
+    output$AseanReExporters <- renderPlotly({
+        p<-ggplot(data = reexport_country_data2, aes(x =year , y =reexport_value, group = country)) +
+            geom_line(aes(color = country), size = 1) +
+            geom_point(aes(color = country), size = 2) +
+            # move the x axis labels up top
+            scale_x_discrete(position = "top") +
+            theme_bw() +
+            # Format tweaks
+            # Remove the legend
+            # Remove the panel border
+            theme(panel.border     = element_blank()) +
+            # Remove just about everything from the y axis
+            theme(panel.grid.major.y = element_blank()) +
+            theme(panel.grid.minor.y = element_blank()) +
+            # Remove a few things from the x axis and increase font size
+            theme(axis.text.x.top      = element_text(size=12)) +
+            # Remove x & y tick marks
+            theme(axis.ticks       = element_blank()) +
+            labs(
+                title = "ASEAN Re-Export Value by Oil from 2000 to 2019")
+        p<-ggplotly(p)
+        p
     })
     #---------------------------------------------------------------------------------------------------------------------------
-    #----------------------------------------------------RE-EXPORT COMMODITY DASHBOARD-----------------------------------------------
-    output$DomesticExportCommodity <- renderPlot({
-        
-        newTitle <- paste0("Commodity domestically exported in ", input$FilterYearDomesticExportCommodity)
-        treemap <- treemap(domesticexport_commodity_data2,
-                           index = "commodity",
-                           vSize="domesticexport_value",
-                           type="index",
-                           palette=brewer.pal(n=8, "Spectral"),
-                           title=newTitle,
-                           title.legend = "Amount (Million US$)",
-                           align.labels = list(c("left", "top"), c("right", "bottom")), fontsize.labels=20
-        )
-        treemap
-    })
-    #---------------------------------------------------------------------------------------------------------------------------
-    
-    
-    
      }
 
 shinyApp(ui = ui, server = server)
