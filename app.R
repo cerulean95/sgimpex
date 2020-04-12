@@ -43,6 +43,8 @@ export_data <- read_csv("data/Domestic Exports Country.csv")
 import_data <- read_csv("data/Import Country.csv")
 export_commodity_data <- read_csv("data/Domestic Exports Commodity.csv")
 import_commodity_data <- read_csv("data/Import Commodity.csv")
+reexport_data <- read_csv("data/Domestic Exports Commodity.csv")
+reexport_comm_data <- read_csv("data/Import Commodity.csv")
 
 # ----- Exports by Country -----
 tidy_data <- separate(export_data, Date, c("month", "year"))
@@ -98,6 +100,10 @@ importexportdata <- filter(importexportdata, !grepl("Oil", country))
 magicquadrantdata <- mutate(importexportdata, export_percentile = ntile(importexportdata$export_value,100))
 magicquadrantdata <- mutate(magicquadrantdata, import_percentile = ntile(importexportdata$import_value,100))
 magicquadrantdata$trade_balance <- magicquadrantdata$export_value - magicquadrantdata$import_value
+
+# ----- Merge of Imports + Exports by Commodity -----
+importexportcommdata <- merge(exportcommdatafinal, importcommdatafinal, by=c("commodity", "year"))
+importexportcommdata <- filter(importexportcommdata, year != 2020)
 
 #---------------------------------------- Total Import and Export of Singapore----------
 export_country_data <- read_csv("data/Exports Country.csv")
@@ -288,7 +294,6 @@ ui <- dashboardPage(
             tabItem(tabName = "MAGICQUADRANT",
                     fluidRow(
                         column(12, h1("Magic Quadrant for Singapore's Trade Partners")),
-                        
                         column(10, plotlyOutput("magicQuadrant", height = "500px"))
                     )
             ),
@@ -304,6 +309,8 @@ ui <- dashboardPage(
             #------------------------------------------------IMPORTERSTRENDBYCOUNTRY DASHBOARD---------------------------------------------------
             tabItem(tabName = "IMPORTERSTRENDBYCOUNTRY",
                     fluidRow(
+                        column(12, h1("Import Trend by Country")),
+                        column(10, plotlyOutput("timeImportCountry", height = "500px"))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
@@ -312,7 +319,8 @@ ui <- dashboardPage(
             #------------------------------------------------IMPORTERSTRENDBYCOMMODITY DASHBOARD---------------------------------------------------
             tabItem(tabName = "IMPORTERSTRENDBYCOMMODITY",
                     fluidRow(
-                        
+                        column(12, h1("Import Trend by Commodity")),
+                        column(10, plotlyOutput("timeImportCommodity", height = "500px"))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
@@ -355,6 +363,9 @@ ui <- dashboardPage(
             #------------------------------------------------EXPORTERSTRENDBYCOMMODITY DASHBOARD---------------------------------------------------
             tabItem(tabName = "EXPORTERSTRENDBYCOMMODITY",
                     fluidRow(
+                        column(12, h1("Exporters Trend by Commodity")),
+                        
+                        column(10, plotlyOutput(outputId="timeExportCommodity", height = "500px"))
                     )
             ),
             #-------------------------------------------------------------------------------------------------------------------
@@ -476,16 +487,27 @@ server <- function(input, output) {
         
         ggplotly(plot)
     })
-    
-    # ----- Exports Country trends -----
+
+    # ----- Exports Trend by Country -----
     output$timeExportCountry <- renderPlotly({
-        plot2 <- ggplot(importexportdata, aes(x = year, y = export_value, color = country)) +
+        plotExp <- ggplot(importexportdata, aes(x = year, y = export_value, color = country)) +
             geom_line() +
-            labs(title = "Time Series of Exports by Country",
+            labs(title = "Export Trend by Country",
                  x = "Year",
-                 y = "Exports")
+                 y = "Export Value")
         
-        ggplotly(plot2)
+        ggplotly(plotExp)
+    })
+    
+    # ----- Exports Trend by Commodity -----
+    output$timeExportCommodity <- renderPlotly({
+        plotExp <- ggplot(importexportcommdata, aes(x = year, y = export_value, color = commodity)) +
+            geom_line() +
+            labs(title = "Export Trend by Commodity",
+                 x = "Year",
+                 y = "Export Value")
+        
+        ggplotly(plotExp)
     })
 
         #----------------------------------------------------EXPORT COMMODITY DASHBOARD-----------------------------------------------
@@ -503,6 +525,28 @@ server <- function(input, output) {
         treemap
     })
     #---------------------------------------------------------------------------------------------------------------------------
+    
+    # ----- Imports Trend by Country -----
+    output$timeImportCountry <- renderPlotly({
+        plotImp <- ggplot(importexportdata, aes(x = year, y = import_value, color = country)) +
+            geom_line() +
+            labs(title = "Import Trend by Country",
+                 x = "Year",
+                 y = "Import Value")
+        
+        ggplotly(plotImp)
+    })
+    
+    # ----- Imports Trend by Commodity -----
+    output$timeImportCommodity <- renderPlotly({
+        plotImp <- ggplot(importexportcommdata, aes(x = year, y = import_value, color = commodity)) +
+            geom_line() +
+            labs(title = "Import Trend by Commodity",
+                 x = "Year",
+                 y = "Import Value")
+        
+        ggplotly(plotImp)
+    })
     
     #----------------------------------------------------IMPORT COMMODITY DASHBOARD-----------------------------------------------
     output$ImportCommodity <- renderPlot({
