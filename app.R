@@ -39,12 +39,14 @@ for(p in packages){
 #--------------------------------------------------------------------------------------------------------
 
 # ----- Reading Data Files -----
-export_data <- read_csv("data/Domestic Exports Country.csv")
+export_data <- read_csv("data/Exports Country.csv")
 import_data <- read_csv("data/Import Country.csv")
-export_commodity_data <- read_csv("data/Domestic Exports Commodity.csv")
+export_commodity_data <- read_csv("data/Exports Commodity.csv")
 import_commodity_data <- read_csv("data/Import Commodity.csv")
-reexport_data <- read_csv("data/Domestic Exports Commodity.csv")
-reexport_comm_data <- read_csv("data/Import Commodity.csv")
+domestic_export_data <- read_csv("data/Domestic Exports Country.csv")
+domesitc_export_comm_data <- read_csv("data/Domestic Exports Commodity.csv")
+reexport_data <- read_csv("data/ReExports Country.csv")
+reexport_comm_data <- read_csv("data/ReExports Commodity.csv")
 
 # ----- Exports by Country -----
 tidy_data <- separate(export_data, Date, c("month", "year"))
@@ -53,7 +55,7 @@ tidy_data$year <- year(tidy_data$year)
 tidy_data$year <- as.integer(tidy_data$year)
 tidy_data <- tidy_data[-c(1)]
 tidy_data <- gather(tidy_data, country, export_value, -year)
-tidy_data <- filter(tidy_data, year != 2020)
+tidy_data <- filter(tidy_data, year < 2020)
 exportdatafinal <- tidy_data %>%
     group_by(country, year) %>%
     summarise(export_value = sum(export_value))
@@ -76,7 +78,7 @@ tidy_data$year <- year(tidy_data$year)
 tidy_data$year <- as.integer(tidy_data$year)
 tidy_data <- tidy_data[-c(1)]
 tidy_data <- gather(tidy_data, commodity, export_value, -year)
-tidy_data <- filter(tidy_data, year != 2020)
+tidy_data <- filter(tidy_data, year < 2020)
 exportcommdatafinal <- tidy_data %>%
     group_by(commodity, year) %>%
     summarise(export_value = sum(export_value))
@@ -88,14 +90,15 @@ tidy_data$year <- year(tidy_data$year)
 tidy_data$year <- as.integer(tidy_data$year)
 tidy_data <- tidy_data[-c(1)]
 tidy_data <- gather(tidy_data, commodity, import_value, -year)
-tidy_data <- filter(tidy_data, year != 2020)
+tidy_data <- filter(tidy_data, year < 2020)
 importcommdatafinal <- tidy_data %>%
     group_by(commodity, year) %>%
     summarise(import_value = sum(import_value))
 
 # ----- Merge of Imports + Exports by Country -----
 importexportdata <- merge(exportdatafinal, importdatafinal, by=c("country","year"))
-importexportdata <- filter(importexportdata, year != 2020)
+importexportdata <- filter(importexportdata, year < 2020)
+importexportdata <- filter(importexportdata, country != "Asia")
 importexportdata <- filter(importexportdata, !grepl("Oil", country))
 magicquadrantdata <- mutate(importexportdata, export_percentile = ntile(importexportdata$export_value,100))
 magicquadrantdata <- mutate(magicquadrantdata, import_percentile = ntile(importexportdata$import_value,100))
@@ -103,7 +106,33 @@ magicquadrantdata$trade_balance <- magicquadrantdata$export_value - magicquadran
 
 # ----- Merge of Imports + Exports by Commodity -----
 importexportcommdata <- merge(exportcommdatafinal, importcommdatafinal, by=c("commodity", "year"))
-importexportcommdata <- filter(importexportcommdata, year != 2020)
+importexportcommdata <- filter(importexportcommdata, year < 2020)
+
+# ----- Domestic Export by Country -----
+tidy_data <- separate(domestic_export_data, Date, c("month", "year"))
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+tidy_data <- tidy_data[-c(1)]
+tidy_data <- gather(tidy_data, country, domesticexport_value, -year)
+tidy_data <- filter(tidy_data, year < 2020)
+domestic_export_data <- tidy_data %>%
+    group_by(country, year) %>%
+    summarise(domesticexport_value = sum(domesticexport_value))
+
+
+# ----- ReExport by Country -----
+colnames(reexport_data)[1] <- "Date"
+tidy_data <- separate(reexport_data, Date, c("month", "year"))
+tidy_data$year <- as.Date(tidy_data$year, format = "%y")
+tidy_data$year <- year(tidy_data$year)
+tidy_data$year <- as.integer(tidy_data$year)
+tidy_data <- tidy_data[-c(1)]
+tidy_data <- gather(tidy_data, country, reexport_value, -year)
+tidy_data <- filter(tidy_data, year < 2020)
+reexport_data <- tidy_data %>%
+    group_by(country, year) %>%
+    summarise(reexport_value = sum(reexport_value))
 
 #---------------------------------------- Total Import and Export of Singapore----------
 export_country_data <- read_csv("data/Exports Country.csv")
@@ -148,6 +177,7 @@ export_commodity_data2 <- export_commodity_datalong %>%
 
 export_commodity_data2$year <- as.integer(format(export_commodity_data2$year, "%Y"))
 export_commodity_data2 <- na.omit(export_commodity_data2)
+export_commodity_data2 <- filter(export_commodity_data2, year < 2020)
 
 import_commodity_data <- read_csv("data/Import Commodity.csv")
 colnames(import_commodity_data)[1] <- "Date"
@@ -168,6 +198,9 @@ import_commodity_data2 <- import_commodity_datalong %>%
 
 import_commodity_data2$year <- as.integer(format(import_commodity_data2$year, "%Y"))
 import_commodity_data2 <- na.omit(import_commodity_data2)
+import_commodity_data2 <- filter(import_commodity_data2, year < 2020)
+
+# ----- Re-Export by Commodity Data
 
 reexport_commodity_data <- read_csv("data/ReExports Commodity.csv")
 colnames(reexport_commodity_data)[1] <- "Date"
@@ -183,31 +216,26 @@ reexport_commodity_datalong <- gather(reexport_commodity_tidy_data, commodity, r
 reexport_commodity_data2 <- reexport_commodity_datalong %>%
     group_by(commodity, year) %>%
     summarise(reexport_value = sum(reexport_value))
-# 6. import tidied dataset to a CSV file
-#write_csv(importdata2, "data/imports_country_tidy.csv")
 
 reexport_commodity_data2$year <- as.integer(format(reexport_commodity_data2$year, "%Y"))
 reexport_commodity_data2 <- na.omit(reexport_commodity_data2)
+reexport_commodity_data2 <- filter(reexport_commodity_data2, year < 2020)
+
+# ----- Domestic Export by Commodity Data -----
 
 domesticexport_commodity_data <- read_csv("data/Domestic Exports Commodity.csv")
 colnames(domesticexport_commodity_data)[1] <- "Date"
-# 1. Separate each row within date column (e.g. "1976-Jan" into "1976" and "Jan")
 domesticexport_commodity_tidy_data <- separate(domesticexport_commodity_data, Date, c("month", "year"))
-# 2. Converts each row within year column into Date format
 domesticexport_commodity_tidy_data$year <- as.Date(domesticexport_commodity_tidy_data$year, format = "%y")
-# 3. Remove first column of dataset (months), as I don't need months for time series
 domesticexport_commodity_tidy_data <- domesticexport_commodity_tidy_data[-c(1)]
-# 4. Use gather() to assign key-value pairs, making the dataset tall/long instead of wide
 domesticexport_commodity_datalong <- gather(domesticexport_commodity_tidy_data, commodity, domesticexport_value, -year)
-# 5. Rearrange dataset and store it in a new variable
 domesticexport_commodity_data2 <- domesticexport_commodity_datalong %>%
     group_by(commodity, year) %>%
     summarise(domesticexport_value = sum(domesticexport_value))
-# 6. import tidied dataset to a CSV file
-#write_csv(importdata2, "data/imports_country_tidy.csv")
 
 domesticexport_commodity_data2$year <- as.integer(format(domesticexport_commodity_data2$year, "%Y"))
 domesticexport_commodity_data2 <- na.omit(domesticexport_commodity_data2)
+domesticexport_commodity_data2 <- filter(domesticexport_commodity_data2, year < 2020)
 
 
 #-----------------------------------------------------------------------------------------------------------
@@ -354,7 +382,6 @@ ui <- dashboardPage(
             tabItem(tabName = "EXPORTERSTRENDBYCOUNTRY",
                     fluidRow(
                         column(12, h1("Exporters Trend by Country")),
-                        
                         column(10, plotlyOutput(outputId="timeExportCountry", height = "500px"))
                     )
             ),
@@ -364,7 +391,6 @@ ui <- dashboardPage(
             tabItem(tabName = "EXPORTERSTRENDBYCOMMODITY",
                     fluidRow(
                         column(12, h1("Exporters Trend by Commodity")),
-                        
                         column(10, plotlyOutput(outputId="timeExportCommodity", height = "500px"))
                     )
             ),
@@ -396,13 +422,24 @@ ui <- dashboardPage(
         
         
         #---------------------------------------------DOMESTICEXPORTERSTRENDBYCOUNTRY DASHBOARD----------------------------------------------
-        tabItem(tabName = "EXPORTERSTRENDBYCOUNTRY",
+        tabItem(tabName = "DOMESTICEXPORTERSTRENDBYCOUNTRY",
                 fluidRow(
+                    column(12, h1("Domestic Export Trend by Country")),
+                    column(10, plotlyOutput(outputId="timeDomExportCountry", height = "500px"))
                 )
         ),
         #-------------------------------------------------------------------------------------------------------------------
         
-        #------------------------------------------------DOMESTICEXPORTERSTRENDBYCOMMODITY DASHBOARD---------------------------------------------------
+        #---------------------------------------------DOMESTICEXPORTERSTRENDBYCOMMODITY DASHBOARD----------------------------------------------
+        tabItem(tabName = "DOMESTICEXPORTERSTRENDBYCOMMODITY",
+                fluidRow(
+                    column(12, h1("Domestic Export Trend by Commodity")),
+                    column(10, plotlyOutput(outputId="timeDomExportCommodity", height = "500px"))
+                )
+        ),
+        #-------------------------------------------------------------------------------------------------------------------
+        
+        #------------------------------------------------DOMESTICEXPORTERSBYCOMMODITY DASHBOARD---------------------------------------------------
         tabItem(tabName = "DOMESTICEXPORTSBYCOMMODITY",
                 fluidRow(
                     column(12, h1("Domestic Export by Commodity")),
@@ -432,8 +469,10 @@ ui <- dashboardPage(
     
     
     #---------------------------------------------REEXPORTERSTRENDBYCOUNTRY DASHBOARD----------------------------------------------
-    tabItem(tabName = "-REEXPORTERSTRENDBYCOUNTRY",
+    tabItem(tabName = "REEXPORTERSTRENDBYCOUNTRY",
             fluidRow(
+                column(12, h1("Re-Export Trend by Country")),
+                column(10, plotlyOutput(outputId="timeReExportCountry", height = "500px"))
             )
     ),
     #-------------------------------------------------------------------------------------------------------------------
@@ -441,6 +480,8 @@ ui <- dashboardPage(
     #------------------------------------------------REEXPORTERSTRENDBYCOMMODITY DASHBOARD---------------------------------------------------
     tabItem(tabName = "REEXPORTERSTRENDBYCOMMODITY",
             fluidRow(
+                column(12, h1("Re-Export Trend by Commodity")),
+                column(10, plotlyOutput(outputId="timeReExportCommodity", height = "500px"))
             )
     ),
     #-------------------------------------------------------------------------------------------------------------------
@@ -467,7 +508,7 @@ ui <- dashboardPage(
 
 server <- function(input, output) {
     
-    # ----- MAGIC QUADRANT DASHBOARD -----
+    # ----------------------------------------------------MAGIC QUADRANT DASHBOARD -----
     output$magicQuadrant <- renderPlotly({
         magicquadrantdata_2019 <- filter(magicquadrantdata, year == 2019)
         plot <- ggplot(magicquadrantdata_2019, aes(x=export_percentile, y=import_percentile, color=trade_balance, text= paste0("Country: ", country))) +
@@ -488,7 +529,7 @@ server <- function(input, output) {
         ggplotly(plot)
     })
 
-    # ----- Exports Trend by Country -----
+    # ----------------------------------------------------Exports Trend by Country -----
     output$timeExportCountry <- renderPlotly({
         plotExp <- ggplot(importexportdata, aes(x = year, y = export_value, color = country)) +
             geom_line() +
@@ -499,10 +540,11 @@ server <- function(input, output) {
         ggplotly(plotExp)
     })
     
-    # ----- Exports Trend by Commodity -----
+    # ----------------------------------------------------Exports Trend by Commodity -----
     output$timeExportCommodity <- renderPlotly({
         plotExp <- ggplot(importexportcommdata, aes(x = year, y = export_value, color = commodity)) +
             geom_line() +
+            scale_y_continuous(labels=comma) +
             labs(title = "Export Trend by Commodity",
                  x = "Year",
                  y = "Export Value")
@@ -526,7 +568,7 @@ server <- function(input, output) {
     })
     #---------------------------------------------------------------------------------------------------------------------------
     
-    # ----- Imports Trend by Country -----
+    # ----------------------------------------------------Imports Trend by Country -----
     output$timeImportCountry <- renderPlotly({
         plotImp <- ggplot(importexportdata, aes(x = year, y = import_value, color = country)) +
             geom_line() +
@@ -537,10 +579,11 @@ server <- function(input, output) {
         ggplotly(plotImp)
     })
     
-    # ----- Imports Trend by Commodity -----
+    # ----------------------------------------------------Imports Trend by Commodity -----
     output$timeImportCommodity <- renderPlotly({
         plotImp <- ggplot(importexportcommdata, aes(x = year, y = import_value, color = commodity)) +
             geom_line() +
+            scale_y_continuous(labels=comma) +
             labs(title = "Import Trend by Commodity",
                  x = "Year",
                  y = "Import Value")
@@ -564,6 +607,60 @@ server <- function(input, output) {
         treemap
     })
     #---------------------------------------------------------------------------------------------------------------------------
+    
+    # ----------------------------------------------------Domestic Exports Trend by Country -----
+    output$timeDomExportCountry <- renderPlotly({
+        domestic_export_data <- filter(domestic_export_data, !grepl("Oil", country))
+        domestic_export_data <- filter(domestic_export_data, !grepl("Other", country))
+        domestic_export_data <- filter(domestic_export_data, !grepl("Emerging", country))
+        plotExp <- ggplot(domestic_export_data, aes(x = year, y = domesticexport_value, color = country)) +
+            geom_line() +
+            labs(title = "Domestic Export Trend by Country",
+                 x = "Year",
+                 y = "Domestic Export Value")
+        
+        ggplotly(plotExp)
+    })
+    
+    # ----------------------------------------------------Domestic Exports Trend by Commodity -----
+    output$timeDomExportCommodity <- renderPlotly({
+        domesticexport_commodity_data <- filter(domesticexport_commodity_data2, year < 2020)
+        plotExp <- ggplot(domesticexport_commodity_data, aes(x = year, y = domesticexport_value, color = commodity)) +
+            geom_line() +
+            scale_y_continuous(labels=comma) +
+            labs(title = "Domestic Export Trend by Commodity",
+                 x = "Year",
+                 y = "Domestic Export Value")
+        
+        ggplotly(plotExp)
+    })
+    #----------------------------------------------------RE-EXPORT TREND COUNTRY DASHBOARD-----------------------------------------------
+    output$timeReExportCountry <- renderPlotly({
+        reexport_data <- filter(reexport_data, year < 2020)
+        reexport_data <- filter(reexport_data, !grepl("Commodity Sum", country))
+        plotExp <- ggplot(reexport_data, aes(x = year, y = reexport_value, color = country)) +
+            geom_line() +
+            scale_y_continuous(labels=comma) +
+            labs(title = "Re-Export Trend by Country",
+                 x = "Year",
+                 y = "Re-Export Value")
+        
+        ggplotly(plotExp)
+    })
+    
+    #----------------------------------------------------RE-EXPORT TREND COMMODITY DASHBOARD-----------------------------------------------
+    output$timeReExportCommodity <- renderPlotly({
+        reexport_commodity_data <- filter(reexport_commodity_data2, year < 2020)
+        plotExp <- ggplot(reexport_commodity_data, aes(x = year, y = reexport_value, color = commodity)) +
+            geom_line() +
+            scale_y_continuous(labels=comma) +
+            labs(title = "Re-Export Trend by Commodity",
+                 x = "Year",
+                 y = "Re-Export Value")
+        
+        ggplotly(plotExp)
+    })
+    
     #----------------------------------------------------RE-EXPORT COMMODITY DASHBOARD-----------------------------------------------
     output$ReExportCommodity <- renderPlot({
         
